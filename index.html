@@ -1,7 +1,78 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Town Territories</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map { height: 600px; width: 100%; }
+        #suggestions { margin-top: 10px; padding: 10px; background: #f4f4f4; border-radius: 5px; }
+    </style>
+</head>
 <body>
-<h1>Hello World</h1>
-<p>I'm hosted with GitHub Pages.</p>
+
+    <h1>Town Territories</h1>
+    <p>Click a territory to suggest a color change.</p>
+    <div id="map"></div>
+    
+    <div id="suggestions">
+        <h3>Suggested Changes</h3>
+        <pre id="output">None yet</pre>
+        <button onclick="copyToClipboard()">Copy JSON</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+
+        // Initialize map centered on Cohasset, MA
+        var map = L.map('map').setView([42.2408, -70.8021], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var territories = {}; // Store Leaflet layers
+        var userSuggestions = JSON.parse(localStorage.getItem("suggestions")) || {};
+
+        // Load GeoJSON
+        fetch('territories.json')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: feature => ({
+                        fillColor: userSuggestions[feature.properties.id] || feature.properties.color || "#3388ff",
+                        color: "#000",
+                        weight: 1,
+                        fillOpacity: 0.5
+                    }),
+                    onEachFeature: function (feature, layer) {
+                        territories[feature.properties.id] = layer;
+                        layer.on('click', function () {
+                            let newColor = prompt("Enter a new color for " + feature.properties.name, "#ff0000");
+                            if (newColor) {
+                                userSuggestions[feature.properties.id] = newColor;
+                                localStorage.setItem("suggestions", JSON.stringify(userSuggestions));
+                                layer.setStyle({ fillColor: newColor });
+                                updateOutput();
+                            }
+                        });
+                    }
+                }).addTo(map);
+                updateOutput();
+            });
+
+        // Update output JSON for admin to copy
+        function updateOutput() {
+            document.getElementById("output").textContent = JSON.stringify(userSuggestions, null, 2);
+        }
+
+        // Copy JSON to clipboard
+        function copyToClipboard() {
+            navigator.clipboard.writeText(document.getElementById("output").textContent);
+            alert("Copied to clipboard!");
+        }
+    </script>
+
 </body>
 </html>

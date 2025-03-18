@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    #adminInterface { display: none; }
+    #canvas-container { position: relative; display: inline-block; border: 1px solid #ccc; }
+    #mapCanvas { position: absolute; top: 0; left: 0; }
+    select, button, input { margin: 5px; padding: 10px; cursor: pointer; }
+    textarea { width: 90%; height: 150px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div id="loginForm">
+    <h1>Admin Login</h1>
+    <p>Enter admin code:</p>
+    <input type="password" id="adminCodeInput" placeholder="Enter code">
+    <button onclick="checkAdminCode()">Login</button>
+    <p id="loginError" style="color: red;"></p>
+  </div>
+  
+  <div id="adminInterface">
+    <h1>Admin Panel</h1>
+    <p>Manage the main map and view recommendations.</p>
+    
+    <h2>Main Map</h2>
+    <div id="mainMapContainer">
+      <img id="mainMapImage" src="cohasset_map.png" alt="Town Map">
+      <canvas id="mainMapCanvas"></canvas>
+    </div>
+    <br>
+    <button onclick="refreshMainMap()">Refresh Main Map</button>
+    
+    <h2>Recommendations</h2>
+    <select id="recSelect">
+      <!-- Options populated by script -->
+    </select>
+    <br>
+    <button onclick="applyRecommendation()">Apply Selected Recommendation</button>
+    <button onclick="clearRecommendations()">Clear Recommendations</button>
+    <br>
+    <textarea id="recOutput" readonly placeholder="Recommendations JSON will appear here"></textarea>
+  </div>
+  
+  <script>
+    // Obfuscated admin code (Base64 for "12903478")
+    const obfuscatedCode = "MTI5MDM0Nzg=";
+    function decodeBase64(str) {
+      try { return atob(str); } catch(e) { return ""; }
+    }
+    
+    function checkAdminCode() {
+      const inputCode = document.getElementById("adminCodeInput").value;
+      const correctCode = decodeBase64(obfuscatedCode);
+      if (inputCode === correctCode) {
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("adminInterface").style.display = "block";
+        loadRecommendations();
+        refreshMainMap();
+      } else {
+        document.getElementById("loginError").textContent = "Incorrect code!";
+      }
+    }
+    
+    // Main Map section
+    const mainImg = document.getElementById("mainMapImage");
+    const mainCanvas = document.getElementById("mainMapCanvas");
+    const mainCtx = mainCanvas.getContext("2d");
+    function resizeMainCanvas() {
+      mainCanvas.width = mainImg.width;
+      mainCanvas.height = mainImg.height;
+      drawMainMap();
+    }
+    mainImg.onload = resizeMainCanvas;
+    function getMainMap() {
+      const data = localStorage.getItem("mainMap");
+      if(data) {
+        try { return JSON.parse(data); } catch(e) { return []; }
+      }
+      return [];
+    }
+    function drawMainMap() {
+      mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+      const territories = getMainMap();
+      territories.forEach(polygon => {
+        mainCtx.fillStyle = polygon.color + "66";
+        mainCtx.strokeStyle = polygon.color;
+        mainCtx.lineWidth = 2;
+        mainCtx.beginPath();
+        polygon.points.forEach((pt, idx) => {
+          if (idx === 0) mainCtx.moveTo(pt.x, pt.y);
+          else mainCtx.lineTo(pt.x, pt.y);
+        });
+        mainCtx.closePath();
+        mainCtx.fill();
+        mainCtx.stroke();
+      });
+    }
+    function refreshMainMap() {
+      resizeMainCanvas();
+    }
+    
+    // Recommendations section
+    function loadRecommendations() {
+      const recSelect = document.getElementById("recSelect");
+      recSelect.innerHTML = "";
+      const recOutput = document.getElementById("recOutput");
+      let recData = localStorage.getItem("recommendations");
+      let recs = [];
+      if(recData) {
+        try { recs = JSON.parse(recData); } catch(e) { recs = []; }
+      }
+      recOutput.value = JSON.stringify(recs, null, 2);
+      for (let i = 0; i < recs.length; i++) {
+        const option = document.createElement("option");
+        option.value = i;
+        option.textContent = "Recommendation " + (i + 1);
+        recSelect.appendChild(option);
+      }
+    }
+    
+    function applyRecommendation() {
+      const recSelect = document.getElementById("recSelect");
+      const index = recSelect.value;
+      let recData = localStorage.getItem("recommendations");
+      let recs = [];
+      if(recData) {
+        try { recs = JSON.parse(recData); } catch(e) { recs = []; }
+      }
+      if (recs.length > index) {
+        // Set the selected recommendation as the main map
+        localStorage.setItem("mainMap", JSON.stringify(recs[index]));
+        alert("Recommendation applied to Main Map.");
+        refreshMainMap();
+      }
+    }
+    
+    function clearRecommendations() {
+      localStorage.removeItem("recommendations");
+      loadRecommendations();
+      alert("Recommendations cleared.");
+    }
+  </script>
+</body>
+</html>

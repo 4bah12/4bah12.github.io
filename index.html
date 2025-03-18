@@ -1,78 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Town Territories</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <style>
-        #map { height: 600px; width: 100%; }
-        #suggestions { margin-top: 10px; padding: 10px; background: #f4f4f4; border-radius: 5px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Main Map</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    #canvas-container { position: relative; display: inline-block; }
+    #mapCanvas { position: absolute; top: 0; left: 0; }
+  </style>
 </head>
 <body>
-
-    <h1>Town Territories</h1>
-    <p>Click a territory to suggest a color change.</p>
-    <div id="map"></div>
+  <h1>Main Map</h1>
+  <p>This is the approved map shown to everyone.</p>
+  <div id="canvas-container">
+    <img id="mapImage" src="cohasset_map.png" alt="Town Map">
+    <canvas id="mapCanvas"></canvas>
+  </div>
+  <script>
+    const img = document.getElementById("mapImage");
+    const canvas = document.getElementById("mapCanvas");
+    const ctx = canvas.getContext("2d");
     
-    <div id="suggestions">
-        <h3>Suggested Changes</h3>
-        <pre id="output">None yet</pre>
-        <button onclick="copyToClipboard()">Copy JSON</button>
-    </div>
-
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <script>
-
-        // Initialize map centered on Cohasset, MA
-        var map = L.map('map').setView([42.2408, -70.8021], 13);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-
-        var territories = {}; // Store Leaflet layers
-        var userSuggestions = JSON.parse(localStorage.getItem("suggestions")) || {};
-
-        // Load GeoJSON
-        fetch('territories.json')
-            .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    style: feature => ({
-                        fillColor: userSuggestions[feature.properties.id] || feature.properties.color || "#3388ff",
-                        color: "#000",
-                        weight: 1,
-                        fillOpacity: 0.5
-                    }),
-                    onEachFeature: function (feature, layer) {
-                        territories[feature.properties.id] = layer;
-                        layer.on('click', function () {
-                            let newColor = prompt("Enter a new color for " + feature.properties.name, "#ff0000");
-                            if (newColor) {
-                                userSuggestions[feature.properties.id] = newColor;
-                                localStorage.setItem("suggestions", JSON.stringify(userSuggestions));
-                                layer.setStyle({ fillColor: newColor });
-                                updateOutput();
-                            }
-                        });
-                    }
-                }).addTo(map);
-                updateOutput();
-            });
-
-        // Update output JSON for admin to copy
-        function updateOutput() {
-            document.getElementById("output").textContent = JSON.stringify(userSuggestions, null, 2);
+    function resizeCanvas() {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      draw();
+    }
+    
+    img.onload = resizeCanvas;
+    
+    function getMainMap() {
+      const data = localStorage.getItem("mainMap");
+      if(data) {
+        try {
+          return JSON.parse(data);
+        } catch(e) {
+          return [];
         }
-
-        // Copy JSON to clipboard
-        function copyToClipboard() {
-            navigator.clipboard.writeText(document.getElementById("output").textContent);
-            alert("Copied to clipboard!");
-        }
-    </script>
-
+      }
+      return [];
+    }
+    
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const territories = getMainMap();
+      territories.forEach(polygon => {
+        ctx.fillStyle = polygon.color + "66"; // semi-transparent fill
+        ctx.strokeStyle = polygon.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        polygon.points.forEach((pt, idx) => {
+          if(idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+  </script>
 </body>
 </html>

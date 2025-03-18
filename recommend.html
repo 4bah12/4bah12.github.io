@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recommendation Map</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    #canvas-container { position: relative; display: inline-block; }
+    #mapCanvas { position: absolute; top: 0; left: 0; }
+    button, input { margin: 5px; padding: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Recommendation Map</h1>
+  <p>Use the tools below to draw your proposed changes.  
+  Left-click to add points, double-click to finish a polygon, right-click to delete a polygon.</p>
+  <label for="colorPicker">Select Color:</label>
+  <input type="color" id="colorPicker" value="#ff0000">
+  
+  <div id="canvas-container">
+    <img id="mapImage" src="cohasset_map.png" alt="Town Map">
+    <canvas id="mapCanvas"></canvas>
+  </div>
+  
+  <div>
+    <button onclick="clearCanvas()">Clear All</button>
+    <button onclick="submitRecommendation()">Submit Recommendation</button>
+  </div>
+  
+  <script>
+    const img = document.getElementById("mapImage");
+    const canvas = document.getElementById("mapCanvas");
+    const ctx = canvas.getContext("2d");
+    const colorPicker = document.getElementById("colorPicker");
+    
+    let territories = []; // Completed polygons
+    let currentPolygon = []; // Points for the polygon currently being drawn
+    
+    function resizeCanvas() {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      draw();
+    }
+    img.onload = resizeCanvas;
+    
+    canvas.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return; // Only left-click for drawing
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      currentPolygon.push({ x, y });
+      draw();
+    });
+    
+    canvas.addEventListener("dblclick", () => {
+      if (currentPolygon.length > 2) {
+        territories.push({ points: [...currentPolygon], color: colorPicker.value });
+        currentPolygon = [];
+        draw();
+      }
+    });
+    
+    canvas.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
+      for (let i = 0; i < territories.length; i++) {
+        if (isPointInsidePolygon({ x: clickX, y: clickY }, territories[i].points)) {
+          territories.splice(i, 1);
+          draw();
+          return;
+        }
+      }
+    });
+    
+    function isPointInsidePolygon(point, polygon) {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        let xi = polygon[i].x, yi = polygon[i].y;
+        let xj = polygon[j].x, yj = polygon[j].y;
+        let intersect = ((yi > point.y) !== (yj > point.y)) &&
+                        (point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+    
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Draw completed territories
+      territories.forEach(polygon => {
+        ctx.fillStyle = polygon.color + "66";
+        ctx.strokeStyle = polygon.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        polygon.points.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+      // Draw current polygon in red
+      if (currentPolygon.length > 0) {
+        ctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.strokeStyle = "red";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        currentPolygon.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+        });
+        ctx.stroke();
+      }
+    }
+    
+    function clearCanvas() {
+      territories = [];
+      currentPolygon = [];
+      draw();
+    }
+    
+    function submitRecommendation() {
+      // Append the current recommendation (set of territories) to localStorage.
+      let recs = [];
+      const recData = localStorage.getItem("recommendations");
+      if (recData) {
+        try {
+          recs = JSON.parse(recData);
+        } catch(e) { recs = []; }
+      }
+      recs.push(territories);
+      localStorage.setItem("recommendations", JSON.stringify(recs));
+      alert("Recommendation submitted!");
+      clearCanvas();
+    }
+  </script>
+</body>
+</html>

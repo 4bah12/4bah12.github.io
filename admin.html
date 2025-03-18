@@ -7,13 +7,18 @@
   <style>
     body { font-family: Arial, sans-serif; text-align: center; }
     #adminInterface { display: none; }
-    #canvas-container { position: relative; display: inline-block; border: 1px solid #ccc; }
-    #mapCanvas { position: absolute; top: 0; left: 0; }
+    #mainMapContainer, #recMapContainer { 
+      position: relative; 
+      display: inline-block; 
+      border: 1px solid #ccc; 
+      margin: 10px; 
+    }
+    #mainMapCanvas, #recMapCanvas { position: absolute; top: 0; left: 0; }
     select, button, input { margin: 5px; padding: 10px; cursor: pointer; }
-    textarea { width: 90%; height: 150px; margin-top: 10px; }
   </style>
 </head>
 <body>
+  <!-- Admin Login Form -->
   <div id="loginForm">
     <h1>Admin Login</h1>
     <p>Enter admin code:</p>
@@ -22,10 +27,12 @@
     <p id="loginError" style="color: red;"></p>
   </div>
   
+  <!-- Admin Interface (shown after successful login) -->
   <div id="adminInterface">
     <h1>Admin Panel</h1>
     <p>Manage the main map and view recommendations.</p>
     
+    <!-- Main Map Display -->
     <h2>Main Map</h2>
     <div id="mainMapContainer">
       <img id="mainMapImage" src="cohasset_map.png" alt="Town Map">
@@ -34,15 +41,19 @@
     <br>
     <button onclick="refreshMainMap()">Refresh Main Map</button>
     
+    <!-- Recommendations Display -->
     <h2>Recommendations</h2>
-    <select id="recSelect">
+    <select id="recSelect" onchange="drawRecMap()">
       <!-- Options populated by script -->
     </select>
     <br>
+    <div id="recMapContainer">
+      <img id="recMapImage" src="cohasset_map.png" alt="Town Map">
+      <canvas id="recMapCanvas"></canvas>
+    </div>
+    <br>
     <button onclick="applyRecommendation()">Apply Selected Recommendation</button>
     <button onclick="clearRecommendations()">Clear Recommendations</button>
-    <br>
-    <textarea id="recOutput" readonly placeholder="Recommendations JSON will appear here"></textarea>
   </div>
   
   <script>
@@ -60,12 +71,13 @@
         document.getElementById("adminInterface").style.display = "block";
         loadRecommendations();
         refreshMainMap();
+        refreshRecMap(); // Initialize recommendation canvas
       } else {
         document.getElementById("loginError").textContent = "Incorrect code!";
       }
     }
     
-    // Main Map section
+    // === Main Map Section ===
     const mainImg = document.getElementById("mainMapImage");
     const mainCanvas = document.getElementById("mainMapCanvas");
     const mainCtx = mainCanvas.getContext("2d");
@@ -86,7 +98,7 @@
       mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
       const territories = getMainMap();
       territories.forEach(polygon => {
-        mainCtx.fillStyle = polygon.color + "66";
+        mainCtx.fillStyle = polygon.color + "66"; // semi-transparent fill
         mainCtx.strokeStyle = polygon.color;
         mainCtx.lineWidth = 2;
         mainCtx.beginPath();
@@ -103,25 +115,69 @@
       resizeMainCanvas();
     }
     
-    // Recommendations section
+    // === Recommendation Map Section ===
+    const recImg = document.getElementById("recMapImage");
+    const recCanvas = document.getElementById("recMapCanvas");
+    const recCtx = recCanvas.getContext("2d");
+    function resizeRecCanvas() {
+      recCanvas.width = recImg.width;
+      recCanvas.height = recImg.height;
+    }
+    recImg.onload = resizeRecCanvas;
+    
+    // Load recommendations from localStorage and populate the select element
     function loadRecommendations() {
       const recSelect = document.getElementById("recSelect");
       recSelect.innerHTML = "";
-      const recOutput = document.getElementById("recOutput");
       let recData = localStorage.getItem("recommendations");
       let recs = [];
       if(recData) {
         try { recs = JSON.parse(recData); } catch(e) { recs = []; }
       }
-      recOutput.value = JSON.stringify(recs, null, 2);
       for (let i = 0; i < recs.length; i++) {
         const option = document.createElement("option");
         option.value = i;
         option.textContent = "Recommendation " + (i + 1);
         recSelect.appendChild(option);
       }
+      // Draw the first recommendation if available
+      drawRecMap();
     }
     
+    // Draw the selected recommendation on the recommendation canvas
+    function drawRecMap() {
+      recCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
+      const recSelect = document.getElementById("recSelect");
+      let recData = localStorage.getItem("recommendations");
+      let recs = [];
+      if(recData) {
+        try { recs = JSON.parse(recData); } catch(e) { recs = []; }
+      }
+      const index = recSelect.value;
+      if (recs.length > index) {
+        const recommendation = recs[index];
+        recommendation.forEach(polygon => {
+          recCtx.fillStyle = polygon.color + "66";
+          recCtx.strokeStyle = polygon.color;
+          recCtx.lineWidth = 2;
+          recCtx.beginPath();
+          polygon.points.forEach((pt, idx) => {
+            if (idx === 0) recCtx.moveTo(pt.x, pt.y);
+            else recCtx.lineTo(pt.x, pt.y);
+          });
+          recCtx.closePath();
+          recCtx.fill();
+          recCtx.stroke();
+        });
+      }
+    }
+    
+    function refreshRecMap() {
+      resizeRecCanvas();
+      drawRecMap();
+    }
+    
+    // Apply the selected recommendation as the main map
     function applyRecommendation() {
       const recSelect = document.getElementById("recSelect");
       const index = recSelect.value;
@@ -131,7 +187,6 @@
         try { recs = JSON.parse(recData); } catch(e) { recs = []; }
       }
       if (recs.length > index) {
-        // Set the selected recommendation as the main map
         localStorage.setItem("mainMap", JSON.stringify(recs[index]));
         alert("Recommendation applied to Main Map.");
         refreshMainMap();
@@ -142,6 +197,7 @@
       localStorage.removeItem("recommendations");
       loadRecommendations();
       alert("Recommendations cleared.");
+      recCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
     }
   </script>
 </body>

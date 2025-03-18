@@ -8,28 +8,39 @@
     body { font-family: Arial, sans-serif; text-align: center; }
     #canvas-container { position: relative; display: inline-block; }
     #mapCanvas { position: absolute; top: 0; left: 0; }
+    #buttons { margin-top: 20px; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
   </style>
 </head>
 <body>
   <h1>Main Map</h1>
   <p>This is the approved map shown to everyone.</p>
+  
   <div id="canvas-container">
     <img id="mapImage" src="cohasset_map.png" alt="Town Map">
     <canvas id="mapCanvas"></canvas>
   </div>
+
+  <!-- Two Buttons for Navigation -->
+  <div id="buttons">
+    <button onclick="window.location.href='recommend.html'">Recommend</button>
+    <button onclick="adminLogin()">Admin</button>
+  </div>
+
   <script>
     const img = document.getElementById("mapImage");
     const canvas = document.getElementById("mapCanvas");
     const ctx = canvas.getContext("2d");
-    
+
+    // Resize canvas to match the image
     function resizeCanvas() {
       canvas.width = img.width;
       canvas.height = img.height;
       draw();
     }
-    
     img.onload = resizeCanvas;
-    
+
+    // Get the main map's territories from localStorage
     function getMainMap() {
       const data = localStorage.getItem("mainMap");
       if(data) {
@@ -41,7 +52,8 @@
       }
       return [];
     }
-    
+
+    // Draw the approved territories on the canvas
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const territories = getMainMap();
@@ -58,6 +70,16 @@
         ctx.fill();
         ctx.stroke();
       });
+    }
+
+    // Admin login function: prompts for a code and, if correct, redirects to admin page.
+    function adminLogin() {
+      const code = prompt("Enter admin code:");
+      if (code === "12903478") {
+        window.location.href = "admin.html";
+      } else {
+        alert("Incorrect code!");
+      }
     }
   </script>
 </body>

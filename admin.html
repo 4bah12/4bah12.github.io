@@ -15,6 +15,7 @@
     }
     #mainMapCanvas, #recMapCanvas { position: absolute; top: 0; left: 0; }
     select, button, input { margin: 5px; padding: 10px; cursor: pointer; }
+    textarea { width: 90%; height: 150px; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -32,16 +33,26 @@
     <h1>Admin Panel</h1>
     <p>Manage the main map and view recommendations.</p>
     
-    <!-- Main Map Display -->
-    <h2>Main Map</h2>
+    <!-- Main Map Editing Section -->
+    <h2>Main Map Editing</h2>
+    <label for="adminColorPicker">Select Drawing Color:</label>
+    <input type="color" id="adminColorPicker" value="#ff0000">
     <div id="mainMapContainer">
       <img id="mainMapImage" src="cohasset_map.png" alt="Town Map">
       <canvas id="mainMapCanvas"></canvas>
     </div>
-    <br>
-    <button onclick="refreshMainMap()">Refresh Main Map</button>
+    <p>
+      <button onclick="saveMainMap()">Save Main Map</button>
+      <button onclick="clearMainMapDrawing()">Clear Main Map Drawing</button>
+      <button onclick="refreshMainMapEditable()">Refresh Main Map</button>
+    </p>
+    <p>
+      <em>
+        Tip: Hold <strong>Shift</strong> and left-click on a polygon (when not drawing) to change its color.
+      </em>
+    </p>
     
-    <!-- Recommendations Display -->
+    <!-- Recommendations Section -->
     <h2>Recommendations</h2>
     <select id="recSelect" onchange="drawRecMap()">
       <!-- Options populated by script -->
@@ -57,12 +68,12 @@
   </div>
   
   <script>
+    // --- Admin Login ---
     // Obfuscated admin code (Base64 for "12903478")
     const obfuscatedCode = "MTI5MDM0Nzg=";
     function decodeBase64(str) {
       try { return atob(str); } catch(e) { return ""; }
     }
-    
     function checkAdminCode() {
       const inputCode = document.getElementById("adminCodeInput").value;
       const correctCode = decodeBase64(obfuscatedCode);
@@ -70,35 +81,51 @@
         document.getElementById("loginForm").style.display = "none";
         document.getElementById("adminInterface").style.display = "block";
         loadRecommendations();
-        refreshMainMap();
+        loadMainMapDrawing();
         refreshRecMap(); // Initialize recommendation canvas
       } else {
         document.getElementById("loginError").textContent = "Incorrect code!";
       }
     }
     
-    // === Main Map Section ===
+    // --- Main Map Editing Section ---
     const mainImg = document.getElementById("mainMapImage");
     const mainCanvas = document.getElementById("mainMapCanvas");
     const mainCtx = mainCanvas.getContext("2d");
+    const adminColorPicker = document.getElementById("adminColorPicker");
+    
+    let mainMapTerritories = [];       // Approved territories (editable)
+    let mainMapCurrentPolygon = [];    // Current polygon being drawn
+    
+    // Load existing main map data from localStorage
+    function loadMainMapDrawing() {
+      const data = localStorage.getItem("mainMap");
+      if(data) {
+        try {
+          mainMapTerritories = JSON.parse(data);
+        } catch(e) {
+          mainMapTerritories = [];
+        }
+      } else {
+        mainMapTerritories = [];
+      }
+      mainMapCurrentPolygon = [];
+      resizeMainCanvas();
+    }
+    
     function resizeMainCanvas() {
       mainCanvas.width = mainImg.width;
       mainCanvas.height = mainImg.height;
-      drawMainMap();
+      drawMainMapEditable();
     }
     mainImg.onload = resizeMainCanvas;
-    function getMainMap() {
-      const data = localStorage.getItem("mainMap");
-      if(data) {
-        try { return JSON.parse(data); } catch(e) { return []; }
-      }
-      return [];
-    }
-    function drawMainMap() {
+    
+    // Draw the editable main map (both saved territories and the current drawing)
+    function drawMainMapEditable() {
       mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
-      const territories = getMainMap();
-      territories.forEach(polygon => {
-        mainCtx.fillStyle = polygon.color + "66"; // semi-transparent fill
+      // Draw existing territories
+      mainMapTerritories.forEach(polygon => {
+        mainCtx.fillStyle = polygon.color + "66";
         mainCtx.strokeStyle = polygon.color;
         mainCtx.lineWidth = 2;
         mainCtx.beginPath();
@@ -110,22 +137,99 @@
         mainCtx.fill();
         mainCtx.stroke();
       });
+      // Draw the polygon being drawn (in red)
+      if (mainMapCurrentPolygon.length > 0) {
+        mainCtx.fillStyle = "rgba(255,0,0,0.5)";
+        mainCtx.strokeStyle = "red";
+        mainCtx.lineWidth = 2;
+        mainCtx.beginPath();
+        mainMapCurrentPolygon.forEach((pt, idx) => {
+          if (idx === 0) mainCtx.moveTo(pt.x, pt.y);
+          else mainCtx.lineTo(pt.x, pt.y);
+        });
+        mainCtx.stroke();
+      }
     }
-    function refreshMainMap() {
+    
+    // Add drawing functionality to the main map canvas.
+    mainCanvas.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return; // Only handle left-click
+      const rect = mainCanvas.getBoundingClientRect();
+      const x = event.clientX - rect.left;
+      const y = event.clientY - rect.top;
+      
+      // If shift is held and no drawing is in progress, attempt to change color.
+      if (event.shiftKey && mainMapCurrentPolygon.length === 0) {
+        for (let i = 0; i < mainMapTerritories.length; i++) {
+          if (isPointInsidePolygon({ x, y }, mainMapTerritories[i].points)) {
+            const newColor = prompt("Enter new color (hex) for this polygon:", mainMapTerritories[i].color);
+            if (newColor) {
+              mainMapTerritories[i].color = newColor;
+              drawMainMapEditable();
+            }
+            return; // Exit without adding a new point.
+          }
+        }
+        return; // If no polygon is found, do nothing.
+      }
+      
+      // Otherwise, add a new point to the current polygon.
+      mainMapCurrentPolygon.push({ x, y });
+      drawMainMapEditable();
+    });
+    
+    // Double-click to finalize the current polygon.
+    mainCanvas.addEventListener("dblclick", () => {
+      if (mainMapCurrentPolygon.length > 2) {
+        mainMapTerritories.push({ points: [...mainMapCurrentPolygon], color: adminColorPicker.value });
+        mainMapCurrentPolygon = [];
+        drawMainMapEditable();
+      }
+    });
+    
+    // Right-click to delete a polygon from the main map.
+    mainCanvas.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const rect = mainCanvas.getBoundingClientRect();
+      const clickX = event.clientX - rect.left;
+      const clickY = event.clientY - rect.top;
+      for (let i = 0; i < mainMapTerritories.length; i++) {
+        if (isPointInsidePolygon({ x: clickX, y: clickY }, mainMapTerritories[i].points)) {
+          mainMapTerritories.splice(i, 1);
+          drawMainMapEditable();
+          return;
+        }
+      }
+    });
+    
+    // Save the edited main map to localStorage.
+    function saveMainMap() {
+      localStorage.setItem("mainMap", JSON.stringify(mainMapTerritories));
+      alert("Main Map updated!");
+    }
+    
+    // Clear all drawings from the main map editor.
+    function clearMainMapDrawing() {
+      mainMapTerritories = [];
+      mainMapCurrentPolygon = [];
+      drawMainMapEditable();
+    }
+    
+    function refreshMainMapEditable() {
       resizeMainCanvas();
     }
     
-    // === Recommendation Map Section ===
+    // --- Recommendations Section ---
     const recImg = document.getElementById("recMapImage");
     const recCanvas = document.getElementById("recMapCanvas");
     const recCtx = recCanvas.getContext("2d");
+    
     function resizeRecCanvas() {
       recCanvas.width = recImg.width;
       recCanvas.height = recImg.height;
     }
     recImg.onload = resizeRecCanvas;
     
-    // Load recommendations from localStorage and populate the select element
     function loadRecommendations() {
       const recSelect = document.getElementById("recSelect");
       recSelect.innerHTML = "";
@@ -140,11 +244,9 @@
         option.textContent = "Recommendation " + (i + 1);
         recSelect.appendChild(option);
       }
-      // Draw the first recommendation if available
       drawRecMap();
     }
     
-    // Draw the selected recommendation on the recommendation canvas
     function drawRecMap() {
       recCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
       const recSelect = document.getElementById("recSelect");
@@ -177,7 +279,7 @@
       drawRecMap();
     }
     
-    // Apply the selected recommendation as the main map
+    // Apply the selected recommendation as the main map.
     function applyRecommendation() {
       const recSelect = document.getElementById("recSelect");
       const index = recSelect.value;
@@ -189,7 +291,7 @@
       if (recs.length > index) {
         localStorage.setItem("mainMap", JSON.stringify(recs[index]));
         alert("Recommendation applied to Main Map.");
-        refreshMainMap();
+        loadMainMapDrawing();
       }
     }
     
@@ -198,6 +300,19 @@
       loadRecommendations();
       alert("Recommendations cleared.");
       recCtx.clearRect(0, 0, recCanvas.width, recCanvas.height);
+    }
+    
+    // --- Utility: Ray-casting algorithm to check if a point is inside a polygon ---
+    function isPointInsidePolygon(point, polygon) {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        let xi = polygon[i].x, yi = polygon[i].y;
+        let xj = polygon[j].x, yj = polygon[j].y;
+        let intersect = ((yi > point.y) !== (yj > point.y)) &&
+                        (point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
     }
   </script>
 </body>
